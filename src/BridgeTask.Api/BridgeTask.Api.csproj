@@ -10,4 +10,9 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\BridgeTask.Application\BridgeTask.Application.csproj" />
+    <ProjectReference Include="..\BridgeTask.Infrastructure\BridgeTask.Infrastructure.csproj" />
+  </ItemGroup>
+
 </Project>

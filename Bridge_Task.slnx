@@ -1,3 +1,8 @@
 <Solution>
-  <Project Path="Bridge_Task/Bridge_Task.csproj" />
+  <Folder Name="/src/">
+    <Project Path="src/BridgeTask.Api/BridgeTask.Api.csproj" />
+    <Project Path="src/BridgeTask.Application/BridgeTask.Application.csproj" />
+    <Project Path="src/BridgeTask.Domain/BridgeTask.Domain.csproj" />
+    <Project Path="src/BridgeTask.Infrastructure/BridgeTask.Infrastructure.csproj" />
+  </Folder>
 </Solution>
