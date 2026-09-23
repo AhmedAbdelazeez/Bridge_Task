@@ -6,7 +6,6 @@ namespace BridgeTask.Api.Controllers;
 
 [ApiController]
 [Route("api/cities")]
-[Produces("application/json")]
 public class CitiesController : ControllerBase
 {
     private readonly ICityService _cityService;
