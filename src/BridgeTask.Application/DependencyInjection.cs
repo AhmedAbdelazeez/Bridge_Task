@@ -15,6 +15,7 @@ public static class DependencyInjection
         services.AddScoped<ICityValidator, CityValidator>();
 
         services.AddScoped<ICountryService, CountryService>();
+        services.AddScoped<ICityService, CityService>();
 
         return services;
     }
