@@ -5,4 +5,7 @@
     <Project Path="src/BridgeTask.Domain/BridgeTask.Domain.csproj" />
     <Project Path="src/BridgeTask.Infrastructure/BridgeTask.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BridgeTask.Tests/BridgeTask.Tests.csproj" />
+  </Folder>
 </Solution>
