@@ -28,7 +28,51 @@ public class AppDbContext : DbContext, IAppDbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+        modelBuilder.Entity<Country>(country =>
+        {
+            country.ToTable("Countries");
+
+            country.HasKey(c => c.Id);
+
+            country.Property(c => c.Name)
+                .IsRequired()
+                .HasMaxLength(Country.NameMaxLength);
+
+            country.Property(c => c.Code)
+                .IsRequired()
+                .HasMaxLength(Country.CodeMaxLength)
+                .IsUnicode(false);
+
+            country.HasIndex(c => c.Code)
+                .IsUnique()
+                .HasDatabaseName("IX_Countries_Code");
+
+            country.HasIndex(c => c.Name)
+                .IsUnique()
+                .HasDatabaseName("IX_Countries_Name");
+        });
+
+        modelBuilder.Entity<City>(city =>
+        {
+            city.ToTable("Cities");
+
+            city.HasKey(c => c.Id);
+
+            city.Property(c => c.Name)
+                .IsRequired()
+                .HasMaxLength(City.NameMaxLength);
+
+            // Reference data must never disappear as a side effect of deleting its parent.
+            city.HasOne(c => c.Country)
+                .WithMany(c => c.Cities)
+                .HasForeignKey(c => c.CountryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Leading CountryId also makes this the index used for the foreign key lookups.
+            city.HasIndex(c => new { c.CountryId, c.Name })
+                .IsUnique()
+                .HasDatabaseName("IX_Cities_CountryId_Name");
+        });
     }
 
     // Validators check business rules first, but two concurrent requests can both pass those checks.
