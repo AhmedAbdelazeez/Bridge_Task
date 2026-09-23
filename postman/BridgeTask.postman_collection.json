@@ -1,0 +1,1574 @@
+{
+  "info": {
+    "name": "BridgeTask API",
+    "description": "Countries and Cities API. Run the whole collection in order (Collection Runner or newman): requests pass ids to each other through collection variables, and the Cleanup folder removes the created data. Country codes are random per run so the collection can be repeated against the same database.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (pm.response.code >= 400) {",
+          "  pm.test('Error response is ProblemDetails', () => {",
+          "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json');",
+          "    const body = pm.response.json();",
+          "    pm.expect(body.status).to.eql(pm.response.code);",
+          "    pm.expect(body).to.have.property('type');",
+          "    pm.expect(body).to.have.property('title');",
+          "    pm.expect(body).to.have.property('traceId');",
+          "  });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Countries",
+      "item": [
+        {
+          "name": "Create Country",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{countryName}}\",\n  \"code\": \"{{countryCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const letters = () => Array.from({ length: 3 }, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join('');",
+                  "const code = letters();",
+                  "pm.collectionVariables.set('countryCode', code);",
+                  "pm.collectionVariables.set('countryName', 'Egypt ' + code);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('Returns the created country', () => {",
+                  "  pm.expect(body.id).to.be.a('number');",
+                  "  pm.expect(body.name).to.eql(pm.collectionVariables.get('countryName'));",
+                  "  pm.expect(body.code).to.eql(pm.collectionVariables.get('countryCode'));",
+                  "});",
+                  "pm.test('Location header points to the new country', () => {",
+                  "  pm.expect(pm.response.headers.get('Location')).to.include('/api/countries/' + body.id);",
+                  "});",
+                  "pm.collectionVariables.set('countryId', body.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Country",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries/{{countryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries",
+                "{{countryId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns the requested country', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.id).to.eql(Number(pm.collectionVariables.get('countryId')));",
+                  "  pm.expect(body).to.have.all.keys('id', 'name', 'code');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Countries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is a paged result', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.items).to.be.an('array');",
+                  "  ['pageNumber', 'pageSize', 'totalCount', 'totalPages', 'hasPreviousPage', 'hasNextPage']",
+                  "    .forEach((p) => pm.expect(body).to.have.property(p));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Countries Pagination",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries?pageNumber=1&pageSize=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries"
+              ],
+              "query": [
+                {
+                  "key": "pageNumber",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is a paged result', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.items).to.be.an('array');",
+                  "  ['pageNumber', 'pageSize', 'totalCount', 'totalPages', 'hasPreviousPage', 'hasNextPage']",
+                  "    .forEach((p) => pm.expect(body).to.have.property(p));",
+                  "});",
+                  "pm.test('Returns at most one item', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.pageSize).to.eql(1);",
+                  "  pm.expect(body.items.length).to.be.at.most(1);",
+                  "  pm.expect(body.hasPreviousPage).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search Countries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries?search={{countryCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "{{countryCode}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Search matches name or code', () => {",
+                  "  const ids = pm.response.json().items.map((c) => c.id);",
+                  "  pm.expect(ids).to.include(Number(pm.collectionVariables.get('countryId')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter by Name",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries?name={{countryName}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries"
+              ],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "{{countryName}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Exact name match returns one country', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.totalCount).to.eql(1);",
+                  "  pm.expect(body.items[0].name).to.eql(pm.collectionVariables.get('countryName'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter by Code",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries?code={{countryCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries"
+              ],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "{{countryCode}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Code filter returns one country', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.totalCount).to.eql(1);",
+                  "  pm.expect(body.items[0].code).to.eql(pm.collectionVariables.get('countryCode'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Combined Country Filters",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries?name={{countryName}}&code={{countryCode}}&pageNumber=1&pageSize=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries"
+              ],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "{{countryName}}"
+                },
+                {
+                  "key": "code",
+                  "value": "{{countryCode}}"
+                },
+                {
+                  "key": "pageNumber",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('All filters must match', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.totalCount).to.eql(1);",
+                  "  pm.expect(body.items[0].id).to.eql(Number(pm.collectionVariables.get('countryId')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Country",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries/{{countryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries",
+                "{{countryId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{countryName}}\",\n  \"code\": \"{{countryCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('countryName', 'Arab Republic of Egypt ' + pm.collectionVariables.get('countryCode'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns the updated country', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.name).to.eql(pm.collectionVariables.get('countryName'));",
+                  "  pm.expect(body.code).to.eql(pm.collectionVariables.get('countryCode'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Country To Delete",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Temporary {{tempCountryCode}}\",\n  \"code\": \"{{tempCountryCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const letters = () => Array.from({ length: 3 }, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join('');",
+                  "pm.collectionVariables.set('tempCountryCode', letters());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('tempCountryId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Country",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries/{{tempCountryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries",
+                "{{tempCountryId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Cities",
+      "item": [
+        {
+          "name": "Create City",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Cairo\",\n  \"countryId\": {{countryId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('Returns the city with its country details', () => {",
+                  "  pm.expect(body.name).to.eql('Cairo');",
+                  "  pm.expect(body.countryId).to.eql(Number(pm.collectionVariables.get('countryId')));",
+                  "  pm.expect(body.countryName).to.eql(pm.collectionVariables.get('countryName'));",
+                  "  pm.expect(body.countryCode).to.eql(pm.collectionVariables.get('countryCode'));",
+                  "});",
+                  "pm.test('Location header points to the new city', () => {",
+                  "  pm.expect(pm.response.headers.get('Location')).to.include('/api/cities/' + body.id);",
+                  "});",
+                  "pm.collectionVariables.set('cityId', body.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Second City",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Alexandria\",\n  \"countryId\": {{countryId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('secondCityId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get City",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities/{{cityId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities",
+                "{{cityId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns the requested city', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.id).to.eql(Number(pm.collectionVariables.get('cityId')));",
+                  "  pm.expect(body).to.have.all.keys('id', 'name', 'countryId', 'countryName', 'countryCode');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Cities",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is a paged result', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.items).to.be.an('array');",
+                  "  ['pageNumber', 'pageSize', 'totalCount', 'totalPages', 'hasPreviousPage', 'hasNextPage']",
+                  "    .forEach((p) => pm.expect(body).to.have.property(p));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pagination",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities?countryId={{countryId}}&pageNumber=1&pageSize=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities"
+              ],
+              "query": [
+                {
+                  "key": "countryId",
+                  "value": "{{countryId}}"
+                },
+                {
+                  "key": "pageNumber",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is a paged result', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.items).to.be.an('array');",
+                  "  ['pageNumber', 'pageSize', 'totalCount', 'totalPages', 'hasPreviousPage', 'hasNextPage']",
+                  "    .forEach((p) => pm.expect(body).to.have.property(p));",
+                  "});",
+                  "pm.test('First page of two', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.items.length).to.eql(1);",
+                  "  pm.expect(body.totalCount).to.eql(2);",
+                  "  pm.expect(body.totalPages).to.eql(2);",
+                  "  pm.expect(body.hasNextPage).to.eql(true);",
+                  "  pm.expect(body.items[0].name).to.eql('Alexandria');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search Cities",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities?search=cai",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "cai"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Every result contains the search term', () => {",
+                  "  const items = pm.response.json().items;",
+                  "  pm.expect(items.length).to.be.above(0);",
+                  "  items.forEach((c) => pm.expect(c.name.toLowerCase()).to.include('cai'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter by Name",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities?name=Cairo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities"
+              ],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "Cairo"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Every result has exactly that name', () => {",
+                  "  const items = pm.response.json().items;",
+                  "  pm.expect(items.length).to.be.above(0);",
+                  "  items.forEach((c) => pm.expect(c.name.toLowerCase()).to.eql('cairo'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter by CountryId",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities?countryId={{countryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities"
+              ],
+              "query": [
+                {
+                  "key": "countryId",
+                  "value": "{{countryId}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Only cities of that country', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.totalCount).to.eql(2);",
+                  "  body.items.forEach((c) => pm.expect(c.countryId).to.eql(Number(pm.collectionVariables.get('countryId'))));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Combined City Filters",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities?countryId={{countryId}}&name=Cairo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities"
+              ],
+              "query": [
+                {
+                  "key": "countryId",
+                  "value": "{{countryId}}"
+                },
+                {
+                  "key": "name",
+                  "value": "Cairo"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('CountryId and name must both match', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.totalCount).to.eql(1);",
+                  "  pm.expect(body.items[0].id).to.eql(Number(pm.collectionVariables.get('cityId')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Cities by Country",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries/{{countryId}}/cities?pageNumber=1&pageSize=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries",
+                "{{countryId}}",
+                "cities"
+              ],
+              "query": [
+                {
+                  "key": "pageNumber",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response is a paged result', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.items).to.be.an('array');",
+                  "  ['pageNumber', 'pageSize', 'totalCount', 'totalPages', 'hasPreviousPage', 'hasNextPage']",
+                  "    .forEach((p) => pm.expect(body).to.have.property(p));",
+                  "});",
+                  "pm.test('Returns the cities of the country ordered by name', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.items.map((c) => c.name)).to.eql(['Alexandria', 'Cairo']);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update City",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities/{{secondCityId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities",
+                "{{secondCityId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Giza\",\n  \"countryId\": {{countryId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns the updated city', () => pm.expect(pm.response.json().name).to.eql('Giza'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete City",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities/{{secondCityId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities",
+                "{{secondCityId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Validation",
+      "item": [
+        {
+          "name": "Create Country - Missing Name",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"ZZ\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Validation error for Name', () => {",
+                  "  pm.expect(pm.response.json().errors).to.have.property('Name');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Country - Invalid Code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Invalid\",\n  \"code\": \"Z1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Validation error for Code', () => {",
+                  "  pm.expect(pm.response.json().errors).to.have.property('Code');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create City - Missing Name",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"countryId\": {{countryId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Validation error for Name', () => {",
+                  "  pm.expect(pm.response.json().errors).to.have.property('Name');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Countries - Page Size Too Large",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries?pageSize=1000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries"
+              ],
+              "query": [
+                {
+                  "key": "pageSize",
+                  "value": "1000"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Validation error for PageSize', () => {",
+                  "  pm.expect(pm.response.json().errors).to.have.property('PageSize');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Error Scenarios",
+      "item": [
+        {
+          "name": "Duplicate Country",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Duplicate\",\n  \"code\": \"{{countryCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Detail explains the problem', () => {",
+                  "  pm.expect(pm.response.json().detail).to.eql(`A country with code '${pm.collectionVariables.get('countryCode')}' already exists.`);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid Country",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries/999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries",
+                "999999"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Detail explains the problem', () => {",
+                  "  pm.expect(pm.response.json().detail).to.eql('Country with id 999999 was not found.');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Duplicate City",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Cairo\",\n  \"countryId\": {{countryId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Detail explains the problem', () => {",
+                  "  pm.expect(pm.response.json().detail).to.eql(\"A city named 'Cairo' already exists in this country.\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid CountryId",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nowhere\",\n  \"countryId\": 999999\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Detail explains the problem', () => {",
+                  "  pm.expect(pm.response.json().detail).to.eql('Country with id 999999 does not exist.');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Nonexistent City",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities/999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities",
+                "999999"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Detail explains the problem', () => {",
+                  "  pm.expect(pm.response.json().detail).to.eql('City with id 999999 was not found.');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cities of Nonexistent Country",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries/999999/cities",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries",
+                "999999",
+                "cities"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Detail explains the problem', () => {",
+                  "  pm.expect(pm.response.json().detail).to.eql('Country with id 999999 was not found.');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Country With Cities",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries/{{countryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries",
+                "{{countryId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Detail explains the problem', () => {",
+                  "  pm.expect(pm.response.json().detail).to.eql('Country cannot be deleted because it contains cities.');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Cleanup",
+      "description": "Removes the data created by this run so the collection can be run again.",
+      "item": [
+        {
+          "name": "Delete Remaining City",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cities/{{cityId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "cities",
+                "{{cityId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Remaining Country",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/countries/{{countryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "countries",
+                "{{countryId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5147"
+    },
+    {
+      "key": "countryId",
+      "value": ""
+    },
+    {
+      "key": "countryName",
+      "value": ""
+    },
+    {
+      "key": "countryCode",
+      "value": ""
+    },
+    {
+      "key": "tempCountryId",
+      "value": ""
+    },
+    {
+      "key": "tempCountryCode",
+      "value": ""
+    },
+    {
+      "key": "cityId",
+      "value": ""
+    },
+    {
+      "key": "secondCityId",
+      "value": ""
+    }
+  ]
+}
