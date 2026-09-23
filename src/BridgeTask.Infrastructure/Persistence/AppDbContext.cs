@@ -12,6 +12,9 @@ public class AppDbContext : DbContext, IAppDbContext
     private const int UniqueIndexViolation = 2601;
     private const int ForeignKeyViolation = 547;
 
+    // Reference data lives in its own schema, apart from future business tables.
+    private const string LookupSchema = "lookup";
+
     private static readonly Dictionary<string, string> UniqueIndexMessages = new()
     {
         ["IX_Countries_Code"] = "A country with this code already exists.",
@@ -30,7 +33,7 @@ public class AppDbContext : DbContext, IAppDbContext
     {
         modelBuilder.Entity<Country>(country =>
         {
-            country.ToTable("Countries");
+            country.ToTable("Countries", LookupSchema);
 
             country.HasKey(c => c.Id);
 
@@ -54,7 +57,7 @@ public class AppDbContext : DbContext, IAppDbContext
 
         modelBuilder.Entity<City>(city =>
         {
-            city.ToTable("Cities");
+            city.ToTable("Cities", LookupSchema);
 
             city.HasKey(c => c.Id);
 

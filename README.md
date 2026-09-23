@@ -38,13 +38,15 @@ Country 1 ──── * City
 
 | Table | Column | Rules |
 |---|---|---|
-| Countries | Id | Primary key (identity) |
+| lookup.Countries | Id | Primary key (identity) |
 | | Name | `nvarchar(100)`, required, **unique** (`IX_Countries_Name`) |
 | | Code | `varchar(3)`, required, **unique** (`IX_Countries_Code`), stored upper-case |
-| Cities | Id | Primary key (identity) |
+| lookup.Cities | Id | Primary key (identity) |
 | | Name | `nvarchar(100)`, required |
 | | CountryId | Required FK → Countries.Id |
 | | (CountryId, Name) | **Composite unique** (`IX_Cities_CountryId_Name`) |
+
+Both tables are reference data, so they live in a dedicated `lookup` schema. That keeps them apart from future business tables without prefixing the domain names: in code they stay `Country` and `City`.
 
 The composite index means "Cairo" can exist only once in Egypt, while the same name is allowed in a different country. `CountryId` is the leading column, so the same index also serves foreign-key lookups and `countryId` filtering; no separate FK index is needed.
 
@@ -171,7 +173,9 @@ dotnet tool install --global dotnet-ef
 dotnet ef database update --project src/BridgeTask.Infrastructure --startup-project src/BridgeTask.Api
 ```
 
-Migration: `InitialCreate` (in `src/BridgeTask.Infrastructure/Persistence/Migrations`).
+Migrations (in `src/BridgeTask.Infrastructure/Persistence/Migrations`):
+- `InitialCreate`: tables, keys, indexes and the restrict foreign key.
+- `MoveReferenceTablesToLookupSchema`: moves both tables into the `lookup` schema, keeping their data.
 
 ### Run the API
 
