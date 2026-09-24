@@ -6,6 +6,7 @@ ASP.NET Core Web API for managing Countries and their Cities: CRUD, filtering, p
 
 - .NET 8, ASP.NET Core Web API (controllers)
 - Entity Framework Core 8 with SQL Server (LocalDB by default)
+- Redis through `IDistributedCache` (`Microsoft.Extensions.Caching.StackExchangeRedis`)
 - Mapster for request-to-entity mapping
 - Swagger / OpenAPI (Swashbuckle)
 - xUnit + `WebApplicationFactory` for tests
@@ -17,8 +18,8 @@ A practical N-layer structure. Dependencies point inwards: `Api → Application 
 ```
 src/
   BridgeTask.Domain          Entities (Country, City) and their length limits
-  BridgeTask.Application     DTOs, validators, services, exceptions, pagination, IAppDbContext
-  BridgeTask.Infrastructure  AppDbContext, Fluent API configurations, migrations
+  BridgeTask.Application     DTOs, validators, services, exceptions, pagination, IAppDbContext, cache-aside policy
+  BridgeTask.Infrastructure  AppDbContext, Fluent API configurations, migrations, Redis cache service
   BridgeTask.Api             Controllers, global exception handler, Program.cs
 tests/
   BridgeTask.Tests           API/integration tests against SQL Server + unit tests
@@ -148,6 +149,77 @@ Adding a future filter (for example `cityId` on a Company endpoint) means one nu
 - No explicit transactions: each operation performs a single `SaveChangesAsync`, which EF already wraps in a transaction.
 - No `RowVersion` concurrency token. For this reference data, last-write-wins on updates is acceptable, and the rules that matter (uniqueness and referential integrity) are enforced by database constraints regardless of timing. A `RowVersion` column would be the next step if clients needed to detect lost updates.
 
+## Caching (Redis)
+
+Countries and cities are reference data: read far more often than they change. Redis keeps repeated reads away from SQL Server. **SQL Server stays the source of truth**. Redis only holds copies that can be dropped at any time.
+
+### Cache-aside
+
+```
+Controller → Service → ReferenceDataCache → Redis
+                                ↓ miss
+                           SQL Server (AsNoTracking + projection) → store DTO in Redis → return
+```
+
+On a hit the DTO comes from Redis and no SQL query runs. On a miss the normal EF query runs, and the DTO is stored with an expiry before it is returned. A `NotFoundException` on a miss is never cached. Only DTOs are cached, never EF entities.
+
+| Layer | Type | Responsibility |
+|---|---|---|
+| Application | `ICacheService` | `GetAsync<T>` / `SetAsync<T>`; must never throw because of the cache store |
+| Application | `ReferenceDataCache` | Cache-aside and invalidation policy used by the services |
+| Application | `CountryCacheKeys`, `CityCacheKeys` | The only place keys are built |
+| Infrastructure | `RedisCacheService` | `IDistributedCache` + `System.Text.Json`, expiry, failure handling |
+
+The services never see Redis types, and all Redis setup is in `AddRedisCache`.
+
+### What is cached
+
+| Endpoint | Key (inside its region) |
+|---|---|
+| `GET /api/countries/{id}` | `countries:v{version}:id:{id}` |
+| `GET /api/countries` | `countries:v{version}:list:{hash}` |
+| `GET /api/cities/{id}` | `cities:v{version}:id:{id}` |
+| `GET /api/cities` | `cities:v{version}:list:{hash}` |
+| `GET /api/countries/{countryId}/cities` | `cities:v{version}:country:{countryId}:list:{hash}` |
+
+`{hash}` is a SHA-256 of **every** parameter that affects the response: page number, page size, search, name, code and countryId. Text values are trimmed and blanks become "no filter", the same way the query treats them. Parameters are serialised before hashing, so a `:` in user input cannot make two filters share a key. Case is not normalised, because case-insensitivity comes from the database collation. All keys are prefixed with `InstanceName` (`BridgeTask:`).
+
+### Invalidation: versioned regions
+
+Each region (`countries`, `cities`) has a version token in Redis (`countries:version`), and every key includes it. A write stores a **new** token. From then on, every read builds keys that don't exist yet, so the old entries are never read again and expire by themselves.
+
+| Write | Regions invalidated | Why |
+|---|---|---|
+| Create country | countries | lists |
+| Update country | countries, cities | `CityDto` contains `CountryName` / `CountryCode` |
+| Delete country | countries, cities | a cached city page for the country would otherwise hide the 404 |
+| Create / update / delete city | cities | the city, all city lists, the old and the new country's city lists |
+
+Why this approach:
+- No `KEYS *` / `SCAN`, and no list of keys to maintain. Invalidation is one `SET`, whatever the number of cached pages.
+- Correct under concurrency. The token is replaced **after** the database commit, and a reader fetches the token **before** it queries. A slow reader that loaded old data therefore stores it under the old token, which nobody reads any more.
+- The trade-off is coarse invalidation (one city write clears all city entries) and one extra Redis `GET` per read for the token. Both are fine for data that rarely changes.
+
+Invalidation uses `CancellationToken.None`, because the data is already committed and a client disconnecting must not skip it. If invalidation fails, the database change is **not** rolled back. The failure is logged at `Error`, and stale entries last at most until they expire.
+
+### Expiration
+
+Every entry uses **absolute** expiration (`DefaultExpirationMinutes`, 10 by default). Nothing is permanent. Absolute expiration bounds how stale an entry can be, even if an invalidation was missed. Sliding expiration would keep frequently read entries alive indefinitely.
+
+### When Redis is down
+
+Redis is an optimisation, never a dependency:
+- A failed read counts as a miss, so the request is served from SQL Server. A failed write is logged and ignored. Writes to SQL Server succeed as usual.
+- Unreadable cache entries count as a miss and are overwritten.
+- After a failure, `RedisCacheService` skips Redis for `FailureCooldownSeconds` (30 by default). Without this, each request would wait for the Redis connection timeout (about 5 s per call, about 11 s per GET when tested locally). With it, requests during an outage take the normal SQL time, and only one warning is logged per cooldown window.
+- Only cancellation requested by the caller is propagated.
+
+Logging: Redis failures are `Warning`, failed invalidations are `Error`, and cache hits and misses are `Debug` (enabled only in `appsettings.Development.json`). Cached values are never logged.
+
+### Cache stampede
+
+When a popular key expires, concurrent requests can all miss and query SQL Server at the same time. For small reference-data queries that cost is minor, so there is no distributed lock. If it became a problem, the options are a per-key lock or request coalescing, or adding random jitter to expiry times.
+
 ## Setup
 
 **Prerequisites:** .NET 8 SDK and SQL Server LocalDB (installed with Visual Studio), or any SQL Server instance.
@@ -176,6 +248,25 @@ dotnet ef database update --project src/BridgeTask.Infrastructure --startup-proj
 Migrations (in `src/BridgeTask.Infrastructure/Persistence/Migrations`):
 - `InitialCreate`: tables, keys, indexes and the restrict foreign key.
 - `MoveReferenceTablesToLookupSchema`: moves both tables into the `lookup` schema, keeping their data.
+
+### Redis (optional)
+
+```json
+"Redis": {
+  "ConnectionString": "localhost:6379",
+  "InstanceName": "BridgeTask:",
+  "DefaultExpirationMinutes": 10,
+  "FailureCooldownSeconds": 30
+}
+```
+
+The API runs without Redis (it logs a warning and reads from SQL Server). To run Redis locally:
+
+```bash
+docker run -d --name bridgetask-redis -p 6379:6379 redis:7-alpine
+```
+
+For a real server, set `Redis__ConnectionString` through an environment variable or user-secrets. Never commit credentials. StackExchange.Redis options such as `password=...,ssl=true,connectTimeout=2000` go in the same string.
 
 ### Run the API
 
